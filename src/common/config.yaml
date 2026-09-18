@@ -1,0 +1,73 @@
+source:
+  rtsp_url: rtsp://127.0.0.1:8554/src1
+
+model:
+  path: /home/sima/prebuilt-apps/models/yolo26m-det-bf16-mla_tess-b1.tar.gz
+  labels: /home/sima/prebuilt-apps/examples/genai/detection-to-vlm-assistant/src/common/coco_label.txt
+
+inference:
+  frames: 0
+  min_score: 0.55
+  nms_iou: 0.60
+  max_detections: 50
+
+runtime:
+  timeout_ms: 4000
+  debug: true
+
+insight:
+  host: 127.0.0.1
+  video_port: 9000
+  metadata_port: 9100
+  channel: 0
+
+genai_server:
+  host: 0.0.0.0
+  port: 9998
+  model:
+    name: Qwen3-VL-4B-Instruct-GPTQ-a16w4
+    path: /media/nvme/llima/models/Qwen3-VL-4B-Instruct-GPTQ-a16w4
+
+genai:
+  trigger_port: 9997
+  # Send the whole decoded frame to the VLM instead of just the person crop
+  # (crop_margin/crop_top_margin below still define the region used to judge
+  # blur via min_sharpness). Avoids a bad detection box clipping the person;
+  # costs more image tokens/latency per request and gets ambiguous if more
+  # than one person is in frame. Set to false to send the crop instead.
+  send_full_frame: true
+  # Skip capturing while the person's box still touches the frame edge (they
+  # haven't fully walked in/out yet); wait for the next frame instead. Meant
+  # for a doorway-entry setup; disable it for a close-up/webcam framing where
+  # the subject's box legitimately touches the edge at rest.
+  edge_check_enabled: false
+  edge_margin_px: 4
+  min_sharpness: 320.0
+  crop_margin: 0.20
+  crop_top_margin: 0.35
+  # Ignore person-count changes for this long after each (re)start -- the
+  # pipeline's first detections post-restart are often unstable and can
+  # otherwise misread as someone walking in.
+  startup_grace_seconds: 3.0
+  # A candidate person-count change must hold steady for this long (seconds)
+  # before it's treated as a real entry/exit, not a blip.
+  person_debounce_seconds: 0.5
+  # After an "entered" transition is confirmed, wait this long before actually
+  # capturing, so the person has time to walk fully in and settle rather than
+  # being caught half-in-frame. With edge_check_enabled: false this is the
+  # only thing pacing the capture, so it needs real headroom.
+  entry_settle_seconds: 1.0
+  enabled: true
+  host: 127.0.0.1
+  port: 9998
+  max_tokens: 70
+  interval_seconds: 20
+  timeout_seconds: 30
+  max_pending_requests: 1
+  system_prompt: >-
+    Describe this scene in detail: what the person is doing, how they appear,
+    and what is visible in the background. Do not guess at identity, age, or
+    protected attributes. Answer in 1-2 concise sentences.
+  user_prompt: >-
+    Describe this scene in detail: what the person is doing, how they appear,
+    and what is visible in the background. Answer in 1-2 concise sentences.
